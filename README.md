@@ -100,9 +100,10 @@ cp approved-stables.example.json approved-stables.json
 
 ```bash
 npm install
-npm run scan            # default size: 10,000 (USDC for USD book, EURC for EUR book)
-npm run scan 50000      # quote a 50k round trip
-NOTIONAL=2000 npm run scan
+npm run scan            # default size: 500 (USDC for USD book, EURC for EUR book)
+npm run scan 250        # quote a 250 round trip
+NOTIONAL=100 npm run scan
+# Size is capped at 500 (USDC/EURC); larger values are clamped down.
 npm test                # offline math self-test
 ```
 

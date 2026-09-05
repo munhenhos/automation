@@ -2,15 +2,19 @@
 // one per currency (USD settles in USDC, EUR settles in EURC).
 // Read-only: no keys, no signing, no execution. Automation comes later.
 
-import { BASES, DEFAULT_NOTIONAL_USDC, type Currency } from "./config.js";
+import { BASES, DEFAULT_NOTIONAL_USDC, MAX_NOTIONAL, type Currency } from "./config.js";
 import { scan, type Opportunity } from "./scan.js";
 
 function notionalFromArgs(): number {
   const arg = process.argv[2] ?? process.env.NOTIONAL;
-  const n = arg ? Number(arg) : DEFAULT_NOTIONAL_USDC;
+  let n = arg ? Number(arg) : DEFAULT_NOTIONAL_USDC;
   if (!Number.isFinite(n) || n <= 0) {
     console.error(`Invalid notional "${arg}", using ${DEFAULT_NOTIONAL_USDC}.`);
     return DEFAULT_NOTIONAL_USDC;
+  }
+  if (n > MAX_NOTIONAL) {
+    console.error(`Notional ${n} exceeds the ${MAX_NOTIONAL} cap; clamping to ${MAX_NOTIONAL}.`);
+    n = MAX_NOTIONAL;
   }
   return n;
 }
