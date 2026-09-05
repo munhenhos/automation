@@ -114,6 +114,21 @@ is roughly fixed, a trip is often negative at 500 but positive at 5000 — the
 ladder makes that visible. Rows profitable at some size are flagged. Quotes go
 stale in seconds — re-run before acting on anything.
 
+## Rate limits (read this before a full scan)
+
+LI.FI's anonymous tier is small. A full ladder scan is ~6 quotes per target
+(2 legs x 3 sizes) and **will exhaust it**, after which LI.FI blocks for hours.
+
+```bash
+export LIFI_API_KEY=your_key   # strongly recommended
+npm run scan
+npm run scan 1000              # or use a single size to cut quote volume 3x
+```
+
+The scanner never reports a rate limit as "no route". If the limit is hit it
+stops and prints `SCAN INCOMPLETE - n/N targets covered`, so a truncated run can
+never be mistaken for "nothing found".
+
 ## Network requirement
 
 The scanner calls two hosts:

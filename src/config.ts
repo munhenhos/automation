@@ -45,7 +45,7 @@ export const CHAINS: Chain[] = [
   { id: 8453, name: "Base", llama: "Base" },
   { id: 1, name: "Ethereum", llama: "Ethereum" },
   { id: 42161, name: "Arbitrum", llama: "Arbitrum" },
-  { id: 10, name: "Optimism", llama: "Optimism" },
+  { id: 10, name: "Optimism", llama: "OP Mainnet", llamaAliases: ["Optimism"] },
   { id: 137, name: "Polygon", llama: "Polygon" },
   { id: 100, name: "Gnosis", llama: "Gnosis", llamaAliases: ["xDai"] },
   // HyperEVM (Hyperliquid's EVM), native gas HYPE. DefiLlama label unconfirmed
@@ -74,6 +74,7 @@ export const STABLE_SYMBOLS = [
   "USDT0", // canonical bridged USDT on HyperEVM
   // EUR — settled back to USDC; the EUR/USD leg cancels across the round trip.
   "EURC", // Circle
+  "EURCV", // Societe Generale Forge
   "EURe", // Monerium
   "EURS", // Stasis
   "EURA", // Angle (formerly agEUR)

@@ -70,9 +70,16 @@ function printTable(currency: Currency, rows: Opportunity[], sizes: number[]) {
 
 async function main() {
   const sizes = stepsFromArgs();
-  const rows = await scan(sizes);
+  const { results: rows, stoppedEarly, scanned, total } = await scan(sizes);
+
+  if (stoppedEarly) {
+    console.log(`
+!! SCAN INCOMPLETE — ${scanned}/${total} targets covered.`);
+    console.log(`   ${stoppedEarly}`);
+  }
+
   if (rows.length === 0) {
-    console.log("\nNo routable stable pairs found. Check network / LI.FI availability.");
+    if (!stoppedEarly) console.log("\nNo routable stable pairs found. Check network / LI.FI availability.");
     return;
   }
 

@@ -16,7 +16,7 @@
 import { BASES, CHAINS, type Currency } from "./config.js";
 import { loadApprovedStables } from "./approved.js";
 import { fetchVerifiedStables, isVerified, type VerifiedPool } from "./defillama.js";
-import { fetchTokens, getQuote, type Token } from "./lifi.js";
+import { RateLimitedError, fetchTokens, getQuote, type Token } from "./lifi.js";
 
 /** Net result at one trade size. null net/netPct means no route at that size. */
 export type StepResult = {
@@ -119,7 +119,12 @@ async function buildTargets(): Promise<{ targets: Target[]; baseTokens: Record<C
   return { targets, baseTokens };
 }
 
-/** Price one target at one size. Returns null if either leg has no route. */
+/**
+ * Price one target at one size. Returns null only when a leg genuinely has no
+ * route. A rate limit throws RateLimitedError so it can never be misread as
+ * "no route" — that distinction is the difference between a real finding and a
+ * false one.
+ */
 async function quoteRoundTrip(
   base: (typeof BASES)[Currency],
   baseToken: Token,
@@ -137,7 +142,8 @@ async function quoteRoundTrip(
     toToken: target.address,
     fromAmount,
   });
-  if (!out || out.toAmount === "0") return null;
+  if (out.status === "rate-limited") throw new RateLimitedError(out.detail);
+  if (out.status !== "ok") return null;
 
   // Leg 2: stable(chain) -> base(Base), feeding leg 1's output back in.
   const back = await getQuote({
@@ -145,23 +151,33 @@ async function quoteRoundTrip(
     toChain: base.chainId,
     fromToken: target.address,
     toToken: baseToken.address,
-    fromAmount: out.toAmount,
+    fromAmount: out.estimate.toAmount,
   });
-  if (!back || back.toAmount === "0") return null;
+  if (back.status === "rate-limited") throw new RateLimitedError(back.detail);
+  if (back.status !== "ok") return null;
 
-  const finalBase = fromRaw(back.toAmount, baseToken.decimals);
+  const finalBase = fromRaw(back.estimate.toAmount, baseToken.decimals);
   const gross = finalBase - size;
-  const gasUsd = out.gasCostsUSD + back.gasCostsUSD;
+  const gasUsd = out.estimate.gasCostsUSD + back.estimate.gasCostsUSD;
   const gasBase = gasUsd / basePriceUsd(baseToken, currency);
   const net = gross - gasBase;
-  return { net, netPct: (net / size) * 100, gasUsd, via: `${out.tool}/${back.tool}` };
+  return { net, netPct: (net / size) * 100, gasUsd, via: `${out.estimate.tool}/${back.estimate.tool}` };
 }
 
-export async function scan(sizes: number[]): Promise<Opportunity[]> {
+export type ScanOutcome = {
+  results: Opportunity[];
+  /** Set when the scan stopped before covering every target. */
+  stoppedEarly?: string;
+  scanned: number;
+  total: number;
+};
+
+export async function scan(sizes: number[]): Promise<ScanOutcome> {
   const { targets, baseTokens } = await buildTargets();
   console.error(`\nScanning ${targets.length} targets at sizes ${sizes.join(", ")} (each base's units)...\n`);
 
   const results: Opportunity[] = [];
+  let scanned = 0;
 
   for (const t of targets) {
     const base = BASES[t.currency];
@@ -178,22 +194,39 @@ export async function scan(sizes: number[]): Promise<Opportunity[]> {
     let via = "";
     let anyRoute = false;
 
-    for (const size of sizes) {
-      const r = await quoteRoundTrip(base, baseToken, t.currency, t, size);
-      if (!r) {
-        steps.push({ size, net: null, netPct: null, gasUsd: null });
-        continue;
+    try {
+      for (const size of sizes) {
+        const r = await quoteRoundTrip(base, baseToken, t.currency, t, size);
+        if (!r) {
+          steps.push({ size, net: null, netPct: null, gasUsd: null });
+          continue;
+        }
+        anyRoute = true;
+        via = r.via;
+        steps.push({ size, net: r.net, netPct: r.netPct, gasUsd: r.gasUsd });
       }
-      anyRoute = true;
-      via = r.via;
-      steps.push({ size, net: r.net, netPct: r.netPct, gasUsd: r.gasUsd });
+    } catch (e) {
+      if (e instanceof RateLimitedError) {
+        console.error("RATE LIMITED");
+        return {
+          results,
+          scanned,
+          total: targets.length,
+          stoppedEarly:
+            `LI.FI rate limit hit after ${scanned}/${targets.length} targets: ${e.message}. ` +
+            `Remaining targets were NOT scanned (this is not "no route"). Set LIFI_API_KEY for a higher limit, or use fewer sizes.`,
+        };
+      }
+      throw e;
     }
 
     if (!anyRoute) {
+      scanned++;
       console.error("no route");
       continue;
     }
 
+    scanned++;
     const nets = steps.map((s) => s.net).filter((n): n is number => n !== null);
     const bestNet = Math.max(...nets);
     console.error(steps.map((s) => `${s.size}:${s.net === null ? "-" : (s.net >= 0 ? "+" : "") + s.net.toFixed(2)}`).join(" "));
@@ -213,5 +246,5 @@ export async function scan(sizes: number[]): Promise<Opportunity[]> {
   }
 
   results.sort((a, b) => b.bestNet - a.bestNet);
-  return results;
+  return { results, scanned, total: targets.length };
 }
