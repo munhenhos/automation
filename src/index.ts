@@ -29,14 +29,15 @@ function printTable(rows: Opportunity[], notional: number) {
     pad("NET %", 9),
     pad("GAS USD", 9),
     pad("VIA (out/in)", 22),
-    "VERIFIED POOL (DefiLlama)",
+    "STABLE + POOL (DefiLlama)",
   ].join(" ");
   console.log(header);
   console.log("-".repeat(header.length + 20));
 
   for (const r of rows) {
     const flag = r.netUsd > 0 ? "  <-- profitable" : "";
-    const pool = `${r.verified.project} ${r.verified.poolSymbol} $${Math.round(r.verified.tvlUsd).toLocaleString()}`;
+    const mcapM = (r.verified.stableMcapUsd / 1e6).toFixed(0);
+    const pool = `mcap $${mcapM}M | ${r.verified.project} ${r.verified.poolSymbol} pool $${Math.round(r.verified.tvlUsd).toLocaleString()}`;
     console.log(
       [
         pad(r.stable, 8),

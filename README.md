@@ -26,14 +26,22 @@ which is correct.
 
 ## What counts as "legit"
 
-A `(chain, stablecoin)` pair is only scanned if **DefiLlama** vouches for it: it
-must appear in a pool from a reputable AMM (Curve, Uniswap, Aerodrome, Balancer,
-Velodrome, Fluid, Sushi, Pancake) with TVL above a floor (default $1M). The
-trusted projects, stables, chains and thresholds all live in `src/config.ts` and
-nothing outside that list is ever touched.
+Two independent gates, both from **DefiLlama**:
 
-Stablecoins considered: USDC, USDT, DAI, USDS, crvUSD, GHO, USDe, FRAX, LUSD.
-Yield-bearing wrappers (sUSDe, sDAI, ...) are excluded — they don't peg to $1.
+1. **The stablecoin is legit and sizeable.** Its circulating supply / market cap
+   (DefiLlama stablecoins dataset, USD-pegged only) must clear a floor — default
+   **$50M**. This is what stops a scam or dead token sneaking in.
+2. **It's actually pooled here.** It must appear in a pool from a reputable AMM
+   (Curve, Uniswap, Aerodrome, Balancer, Velodrome, Fluid, Sushi, Pancake) on
+   that chain. The pool TVL floor is deliberately **low ($1k)** — small,
+   unbalanced pools are where the arbitrage lives, so we don't exclude them.
+
+So: big trusted stables, small pools welcome. The trusted projects, candidate
+stables, chains and both thresholds all live in `src/config.ts`.
+
+Candidate stablecoins: USDC, USDT, DAI, USDS, crvUSD, GHO, USDe, FRAX, LUSD —
+each still has to pass the market-cap gate at runtime. Yield-bearing wrappers
+(sUSDe, sDAI, ...) are excluded; they don't peg to $1.
 
 Chains scanned: Base (home), Ethereum, Arbitrum, Optimism, Polygon.
 
@@ -56,6 +64,7 @@ flagged. Quotes go stale in seconds — re-run before acting on anything.
 The scanner calls two hosts:
 
 - `yields.llama.fi` (DefiLlama pools)
+- `stablecoins.llama.fi` (DefiLlama stablecoin market caps)
 - `li.quest` (LI.FI / Jumper quotes and token lists)
 
 **Both must be reachable.** In a restricted/managed environment these may be
@@ -69,6 +78,11 @@ allow-listed. The code itself is unaffected — `npm test` runs fully offline.
 - It does **not** account for MEV, mempool competition, or the fact that a
   visible arb is often gone by the time you'd land the tx.
 - Quotes are indicative. Real fills can differ.
+- **Small pools cut both ways.** A tiny pool is easy to unbalance, but you can
+  only trade it up to its depth — a large order moves the price and eats its own
+  edge. The LI.FI quotes reflect the best *aggregated* route at the size you ask
+  for, so if you want to target a specific small pool, quote a size at or below
+  that pool's TVL. Big size on a small pool is a mirage.
 
 ## Where automation would plug in
 
@@ -83,7 +97,7 @@ limits, and your explicit go-ahead.
 
 ```
 src/config.ts     trusted chains, stables, projects, thresholds, trade size
-src/defillama.ts  pulls pools, builds the verified (chain, stable) whitelist
+src/defillama.ts  stablecoin market caps + pools -> verified (chain, stable) set
 src/lifi.ts       token addresses + executable round-trip quotes
 src/scan.ts       the round-trip loop and net-PnL math
 src/index.ts      CLI entry + ranked table

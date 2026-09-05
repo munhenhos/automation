@@ -26,8 +26,9 @@ export const CHAINS: Chain[] = [
   { id: 137, name: "Polygon", llama: "Polygon" },
 ];
 
-// Stablecoins we are willing to touch. Only $1-pegged, deeply liquid, and
-// present in reputable pools. Yield-bearing wrappers (sUSDe, sDAI, etc.) are
+// Candidate stablecoins by name. This is the name allowlist; each one still has
+// to pass a live legitimacy gate (see MIN_STABLE_MCAP_USD) before it's scanned.
+// Only $1-pegged assets. Yield-bearing wrappers (sUSDe, sDAI, etc.) are
 // deliberately excluded — they do not peg to $1.
 export const STABLE_SYMBOLS = [
   "USDC",
@@ -58,9 +59,18 @@ export const ALLOWED_PROJECTS = new Set<string>([
   "pancakeswap-amm-v3",
 ]);
 
-// A stable must sit in at least one allowed pool with this much TVL (USD) on a
-// chain before we trust it there.
-export const MIN_POOL_TVL_USD = 1_000_000;
+// Legitimacy of the STABLE itself: its total circulating supply / market cap
+// (from DefiLlama's stablecoins dataset) must clear this floor. This is the
+// "is this a real, sizeable stablecoin" gate. Small pools are fine; small
+// stablecoins are not.
+export const MIN_STABLE_MCAP_USD = 50_000_000;
+
+// A stable must sit in at least one allowed pool with at least this much TVL
+// (USD) on a chain before we scan it there. Kept low on purpose: small,
+// unbalanced pools are where the arbitrage lives. This only proves the stable
+// is actually pooled on a reputable venue on that chain — not that the pool is
+// deep.
+export const MIN_POOL_TVL_USD = 1_000;
 
 // Trade size to quote, in USDC. Real profitability is size-dependent, so this
 // matters. Override with the first CLI arg or NOTIONAL env var.
