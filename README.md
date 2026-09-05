@@ -6,18 +6,23 @@ Automation comes later.
 
 ## The idea
 
-House rules: every trade starts and ends in **USDC on Base**. So an opportunity
-is a full round trip:
+USD and EUR are scanned as two separate books, each with its own home base:
 
 ```
-USDC @ Base  ->  <stable> @ <chain>  ->  USDC @ Base
+USD stables:  USDC @ Base  ->  <stable> @ <chain>  ->  USDC @ Base
+EUR stables:  EURC @ Base  ->  <stable> @ <chain>  ->  EURC @ Base
 ```
+
+Each round trip starts and ends on Base, in that book's base asset. Keeping EUR
+on EURC means a EUR trade never crosses EUR/USD — it's a pure EUR-peg imbalance,
+no FX exposure. Results print as two tables, USD then EUR.
 
 Both legs are priced with **real executable quotes from LI.FI** (the engine
-behind [Jumper](https://jumper.exchange)). That means the numbers already
-include DEX fees, bridge fees and slippage for the size you're quoting. We then
-subtract gas. If you'd end with more USDC than you started, the pool is
-mispriced enough to trade *after all costs* — not just in theory.
+behind [Jumper](https://jumper.exchange)). The numbers already include DEX fees,
+bridge fees and slippage for the size you're quoting. Gas (which LI.FI reports in
+USD) is converted into the book's base currency and subtracted, so net PnL is in
+that base's units. If you'd end with more of the base than you started, the pool
+is mispriced enough to trade *after all costs* — not just in theory.
 
 This is the honest part: a 0.3% peg deviation is not 0.3% profit. Size,
 slippage, bridge fees and gas eat most small deviations. The scanner shows the
@@ -47,14 +52,11 @@ Each still has to pass the market-cap gate at runtime (for EUR stables the suppl
 is converted to USD via price, so the floor is like-for-like). Yield-bearing
 wrappers (sUSDe, sDAI, ...) are excluded; they don't hold a fixed peg.
 
-**On EUR stables and the "settle in USDC" rule.** Everything still ends in USDC
-on Base. A `USDC -> EURx -> USDC` round trip crosses EUR/USD twice, in opposite
-directions almost simultaneously, so the exchange rate cancels to first order —
-what's left is whether that EUR stable is trading at different prices across
-pools (the imbalance), net of fees and gas. Same method, no EUR home needed.
-Caveat: EUR stables are thinner and the EUR/USD spread is wider, so expect more
-noise and more false positives on the EUR rows. Trust the net-after-gas number,
-not the gross.
+**EUR is its own book.** EUR stables round-trip against EURC on Base, not USDC,
+so no EUR/USD crossing enters the trade — the number is a clean EUR-peg
+imbalance. The market-cap floor is still applied in USD (EUR supply × price) so
+"decent size" means the same thing across both books. Caveat: EUR stables are
+thinner, so expect more noise on the EUR table. Trust net-after-gas, not gross.
 
 Chains scanned: Base (home), Ethereum, Arbitrum, Optimism, Polygon, Gnosis,
 HyperEVM (Hyperliquid), Robinhood Chain. All are bridgeable via Jumper/LI.FI.
@@ -81,13 +83,15 @@ cp approved-stables.example.json approved-stables.json
 
 ```json
 [
-  { "chainId": 8453, "symbol": "SOMEUSD", "address": "0xTheExactTokenContract", "note": "why you trust it" }
+  { "chainId": 8453, "symbol": "SOMEUSD", "address": "0xTheExactTokenContract", "currency": "USD", "note": "why you trust it" }
 ]
 ```
 
 - `chainId` must be a chain the scanner already covers (see the list above).
 - `address` must be the real 0x token contract on that chain — malformed or
   wrong-chain entries are skipped with a warning, never trusted silently.
+- `currency` is `"USD"` or `"EUR"` (defaults to `USD`) — it decides which base
+  the stable round-trips against (USDC or EURC on Base).
 - Manual entries show as `MANUAL (you approved)` in the output.
 - The file is git-ignored so your picks stay local. Override the path with
   `APPROVED_STABLES=/path/to/file`. Commit it deliberately if you want it shared.
@@ -96,15 +100,16 @@ cp approved-stables.example.json approved-stables.json
 
 ```bash
 npm install
-npm run scan            # default size: 10,000 USDC
+npm run scan            # default size: 10,000 (USDC for USD book, EURC for EUR book)
 npm run scan 50000      # quote a 50k round trip
 NOTIONAL=2000 npm run scan
 npm test                # offline math self-test
 ```
 
-Output is a ranked table: net USD, net %, gas, the bridge/DEX used on each leg,
-and the DefiLlama pool that vouches for the stable. Rows that clear costs are
-flagged. Quotes go stale in seconds — re-run before acting on anything.
+Output is two ranked tables (USD then EUR): net in the base asset, net %, gas,
+the bridge/DEX used on each leg, and the DefiLlama pool that vouches for the
+stable. Rows that clear costs are flagged. Quotes go stale in seconds — re-run
+before acting on anything.
 
 ## Network requirement
 

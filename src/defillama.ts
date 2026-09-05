@@ -9,6 +9,8 @@ import {
   MIN_POOL_TVL_USD,
   MIN_STABLE_MCAP_USD,
   STABLE_SYMBOLS,
+  pegTypeToCurrency,
+  type Currency,
 } from "./config.js";
 
 const POOLS_URL = "https://yields.llama.fi/pools";
@@ -32,7 +34,11 @@ export type VerifiedPool = {
   tvlUsd: number;
   /** Global circulating supply / market cap of the stable (USD). */
   stableMcapUsd: number;
+  /** USD or EUR — decides which base the round trip uses. */
+  currency: Currency;
 };
+
+export type StableInfo = { mcapUsd: number; currency: Currency };
 
 // Map every DefiLlama chain spelling we accept (canonical + aliases, lowercased)
 // back to our EVM chain id. Verified pairs are then keyed by chain id, so an
@@ -66,23 +72,26 @@ export function mcapUsd(pegType: string, circulating: Record<string, number> | n
 }
 
 /**
- * Pull DefiLlama's stablecoins dataset and return uppercased symbol ->
- * circulating market cap in USD, for the allowed peg types (USD, EUR). This is
+ * Pull DefiLlama's stablecoins dataset and return uppercased symbol -> its USD
+ * market cap and currency bucket, for the allowed peg types (USD, EUR). This is
  * the source of truth for "is this stablecoin legit and sizeable".
  */
-export async function fetchStableMarketCaps(): Promise<Map<string, number>> {
+export async function fetchStableMarketCaps(): Promise<Map<string, StableInfo>> {
   const res = await fetch(STABLECOINS_URL);
   if (!res.ok) throw new Error(`DefiLlama stablecoins request failed: ${res.status}`);
   const body = (await res.json()) as { peggedAssets: PeggedAsset[] };
 
-  const caps = new Map<string, number>();
+  const caps = new Map<string, StableInfo>();
   for (const a of body.peggedAssets) {
     if (!ALLOWED_PEG_TYPES.has(a.pegType)) continue;
+    const currency = pegTypeToCurrency(a.pegType);
+    if (!currency) continue;
     const cap = mcapUsd(a.pegType, a.circulating, a.price);
     if (cap <= 0) continue;
     const key = a.symbol.toUpperCase();
     // Keep the largest if a symbol appears twice.
-    caps.set(key, Math.max(caps.get(key) ?? 0, cap));
+    const existing = caps.get(key);
+    if (!existing || cap > existing.mcapUsd) caps.set(key, { mcapUsd: cap, currency });
   }
   return caps;
 }
@@ -121,8 +130,8 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
       const upper = leg.toUpperCase();
 
       // Gate 1: the stable itself must be legit and sizeable.
-      const mcap = marketCaps.get(upper) ?? 0;
-      if (mcap < MIN_STABLE_MCAP_USD) {
+      const info = marketCaps.get(upper);
+      if (!info || info.mcapUsd < MIN_STABLE_MCAP_USD) {
         rejectedForMcap.add(upper);
         continue;
       }
@@ -136,7 +145,8 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
           project: p.project,
           poolSymbol: p.symbol,
           tvlUsd: p.tvlUsd,
-          stableMcapUsd: mcap,
+          stableMcapUsd: info.mcapUsd,
+          currency: info.currency,
         });
       }
     }

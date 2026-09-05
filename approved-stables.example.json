@@ -3,6 +3,14 @@
     "chainId": 8453,
     "symbol": "EXAMPLEUSD",
     "address": "0x0000000000000000000000000000000000000000",
+    "currency": "USD",
     "note": "why you trust this one — copy this file to approved-stables.json and edit"
+  },
+  {
+    "chainId": 100,
+    "symbol": "EXAMPLEEUR",
+    "address": "0x0000000000000000000000000000000000000000",
+    "currency": "EUR",
+    "note": "EUR entries round-trip against EURC on Base; omit currency to default to USD"
   }
 ]

@@ -7,12 +7,13 @@
 // path with APPROVED_STABLES=/path/to/file.
 
 import { existsSync, readFileSync } from "node:fs";
-import { CHAINS } from "./config.js";
+import { CHAINS, type Currency } from "./config.js";
 
 export type ApprovedStable = {
   chainId: number;
   symbol: string;
   address: string;
+  currency: Currency;
   note?: string;
 };
 
@@ -55,10 +56,18 @@ export function loadApprovedStables(): ApprovedStable[] {
       console.error(`  approved-stables: ${where} (${e.symbol}) skipped — address must be a 0x-prefixed 40-hex token address.`);
       continue;
     }
+    // currency defaults to USD; anything other than USD/EUR is rejected so it
+    // can't silently route against the wrong base.
+    const currency = (e.currency ?? "USD") as string;
+    if (currency !== "USD" && currency !== "EUR") {
+      console.error(`  approved-stables: ${where} (${e.symbol}) skipped — currency must be "USD" or "EUR".`);
+      continue;
+    }
     out.push({
       chainId: e.chainId,
       symbol: e.symbol.trim().toUpperCase(),
       address: e.address,
+      currency,
       note: typeof e.note === "string" ? e.note : undefined,
     });
   }

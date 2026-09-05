@@ -1,7 +1,8 @@
-// CLI entry. Runs the scan and prints a ranked table of where the trades are.
+// CLI entry. Runs the scan and prints ranked tables of where the trades are —
+// one per currency (USD settles in USDC, EUR settles in EURC).
 // Read-only: no keys, no signing, no execution. Automation comes later.
 
-import { DEFAULT_NOTIONAL_USDC } from "./config.js";
+import { BASES, DEFAULT_NOTIONAL_USDC, type Currency } from "./config.js";
 import { scan, type Opportunity } from "./scan.js";
 
 function notionalFromArgs(): number {
@@ -18,14 +19,20 @@ function pad(s: string, n: number): string {
   return s.length >= n ? s : s + " ".repeat(n - s.length);
 }
 
-function printTable(rows: Opportunity[], notional: number) {
-  console.log(`\nRound trip: USDC@Base -> stable@chain -> USDC@Base, size ${notional.toLocaleString()} USDC`);
-  console.log("Net = final USDC minus starting USDC minus gas. Fees & slippage already in the quotes.\n");
+function printTable(currency: Currency, rows: Opportunity[], notional: number) {
+  const base = BASES[currency].symbol;
+  console.log(`\n=== ${currency} — round trip: ${base}@Base -> stable@chain -> ${base}@Base, size ${notional.toLocaleString()} ${base} ===`);
+
+  if (rows.length === 0) {
+    console.log(`No routable ${currency} pairs.`);
+    return;
+  }
+  console.log(`Net = final ${base} minus starting ${base} minus gas (gas converted to ${base}). Fees & slippage already in the quotes.\n`);
 
   const header = [
     pad("STABLE", 8),
     pad("CHAIN", 10),
-    pad("NET USD", 12),
+    pad(`NET ${base}`, 13),
     pad("NET %", 9),
     pad("GAS USD", 9),
     pad("VIA (out/in)", 22),
@@ -35,7 +42,7 @@ function printTable(rows: Opportunity[], notional: number) {
   console.log("-".repeat(header.length + 20));
 
   for (const r of rows) {
-    const flag = r.netUsd > 0 ? "  <-- profitable" : "";
+    const flag = r.net > 0 ? "  <-- profitable" : "";
     let pool: string;
     if (r.source === "manual") {
       pool = `MANUAL (you approved) ${r.address}${r.note ? ` — ${r.note}` : ""}`;
@@ -49,7 +56,7 @@ function printTable(rows: Opportunity[], notional: number) {
       [
         pad(r.stable, 8),
         pad(r.chain, 10),
-        pad(`${r.netUsd >= 0 ? "+" : ""}${r.netUsd.toFixed(2)}`, 12),
+        pad(`${r.net >= 0 ? "+" : ""}${r.net.toFixed(2)}`, 13),
         pad(`${r.netPct.toFixed(3)}%`, 9),
         pad(r.gasUsd.toFixed(2), 9),
         pad(`${r.outboundTool}/${r.inboundTool}`, 22),
@@ -58,13 +65,8 @@ function printTable(rows: Opportunity[], notional: number) {
     );
   }
 
-  const profitable = rows.filter((r) => r.netUsd > 0);
-  console.log(`\n${profitable.length} of ${rows.length} round trips net positive at this size.`);
-  if (profitable.length === 0) {
-    console.log("Nothing clears fees + gas right now. That's the normal state — pegs are tight.");
-  } else {
-    console.log("Profitable rows are executable today, but quotes go stale in seconds. Re-run before acting.");
-  }
+  const profitable = rows.filter((r) => r.net > 0);
+  console.log(`\n${profitable.length} of ${rows.length} ${currency} round trips net positive at this size.`);
 }
 
 async function main() {
@@ -74,7 +76,17 @@ async function main() {
     console.log("\nNo routable stable pairs found. Check network / LI.FI availability.");
     return;
   }
-  printTable(rows, notional);
+
+  for (const currency of Object.keys(BASES) as Currency[]) {
+    printTable(currency, rows.filter((r) => r.currency === currency), notional);
+  }
+
+  const anyProfit = rows.some((r) => r.net > 0);
+  console.log(
+    anyProfit
+      ? "\nProfitable rows are executable today, but quotes go stale in seconds. Re-run before acting."
+      : "\nNothing clears fees + gas right now. That's the normal state — pegs are tight.",
+  );
 }
 
 main().catch((err) => {

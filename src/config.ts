@@ -15,12 +15,30 @@ export type Chain = {
   llamaAliases?: string[];
 };
 
-// Home base. Every opportunity must start and end here.
-// USDC on Base.
-export const HOME = {
-  chainId: 8453,
-  symbol: "USDC",
-} as const;
+export type Currency = "USD" | "EUR";
+
+export type QuoteBase = {
+  /** Chain the round trip starts and ends on (Base). */
+  chainId: number;
+  /** Base asset symbol used to enter and exit. */
+  symbol: string;
+  currency: Currency;
+};
+
+// Two separate homes, one per currency. USD stables round-trip against USDC on
+// Base; EUR stables round-trip against EURC on Base. Keeping them separate means
+// a EUR opportunity never crosses EUR/USD — it's a pure EUR-peg imbalance.
+export const BASES: Record<Currency, QuoteBase> = {
+  USD: { chainId: 8453, symbol: "USDC", currency: "USD" },
+  EUR: { chainId: 8453, symbol: "EURC", currency: "EUR" },
+};
+
+/** DefiLlama pegType -> our currency bucket. */
+export function pegTypeToCurrency(pegType: string): Currency | undefined {
+  if (pegType === "peggedUSD") return "USD";
+  if (pegType === "peggedEUR") return "EUR";
+  return undefined;
+}
 
 // Chains we scan. Base is home; the rest are reachable via Jumper/LI.FI.
 export const CHAINS: Chain[] = [
