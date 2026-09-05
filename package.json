@@ -1,0 +1,17 @@
+{
+  "name": "stablecoin-arb-scanner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only scanner that finds arbitrage in unbalanced stablecoin pools. Home base is USDC on Base; opportunities are validated as executable round-trips via LI.FI (Jumper) and vetted against DefiLlama.",
+  "scripts": {
+    "scan": "tsx src/index.ts",
+    "test": "tsx src/selftest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
