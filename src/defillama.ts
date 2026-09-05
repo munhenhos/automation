@@ -33,7 +33,15 @@ export type VerifiedPool = {
   stableMcapUsd: number;
 };
 
-const llamaByChainId = new Map(CHAINS.map((c) => [c.id, c.llama]));
+// Map every DefiLlama chain spelling we accept (canonical + aliases, lowercased)
+// back to our EVM chain id. Verified pairs are then keyed by chain id, so an
+// alias can never mismatch the lookup.
+const chainIdByLlamaName = new Map<string, number>();
+for (const c of CHAINS) {
+  for (const name of [c.llama, ...(c.llamaAliases ?? [])]) {
+    chainIdByLlamaName.set(name.toLowerCase(), c.id);
+  }
+}
 
 type PeggedAsset = {
   symbol: string;
@@ -79,7 +87,6 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
   if (!poolsRes.ok) throw new Error(`DefiLlama pools request failed: ${poolsRes.status}`);
   const body = (await poolsRes.json()) as { data: LlamaPool[] };
 
-  const wantChains = new Set(CHAINS.map((c) => c.llama));
   const wantStables = new Set(STABLE_SYMBOLS.map((s) => s.toLowerCase()));
 
   const verified = new Map<string, VerifiedPool>();
@@ -87,7 +94,8 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
 
   for (const p of body.data) {
     if (!p.stablecoin) continue;
-    if (!wantChains.has(p.chain)) continue;
+    const chainId = chainIdByLlamaName.get(p.chain.toLowerCase());
+    if (chainId === undefined) continue; // chain not in scope
     if (!ALLOWED_PROJECTS.has(p.project)) continue;
     if (p.tvlUsd < MIN_POOL_TVL_USD) continue;
 
@@ -104,7 +112,7 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
         continue;
       }
 
-      const key = `${p.chain}:${upper}`;
+      const key = `${chainId}:${upper}`;
       const existing = verified.get(key);
       if (!existing || p.tvlUsd > existing.tvlUsd) {
         verified.set(key, {
@@ -133,7 +141,5 @@ export function isVerified(
   chainId: number,
   symbol: string,
 ): VerifiedPool | undefined {
-  const llama = llamaByChainId.get(chainId);
-  if (!llama) return undefined;
-  return verified.get(`${llama}:${symbol.toUpperCase()}`);
+  return verified.get(`${chainId}:${symbol.toUpperCase()}`);
 }

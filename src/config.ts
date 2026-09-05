@@ -8,6 +8,11 @@ export type Chain = {
   name: string;
   /** DefiLlama's `chain` field spelling, used to match pools. */
   llama: string;
+  /**
+   * Extra spellings DefiLlama might use for the same chain. Any match counts.
+   * Used for newer chains where the exact `chain` label is uncertain.
+   */
+  llamaAliases?: string[];
 };
 
 // Home base. Every opportunity must start and end here.
@@ -24,6 +29,12 @@ export const CHAINS: Chain[] = [
   { id: 42161, name: "Arbitrum", llama: "Arbitrum" },
   { id: 10, name: "Optimism", llama: "Optimism" },
   { id: 137, name: "Polygon", llama: "Polygon" },
+  { id: 100, name: "Gnosis", llama: "Gnosis", llamaAliases: ["xDai"] },
+  // HyperEVM (Hyperliquid's EVM), native gas HYPE. DefiLlama label unconfirmed
+  // from here — match the likely spellings.
+  { id: 999, name: "HyperEVM", llama: "Hyperliquid", llamaAliases: ["HyperEVM", "Hyperliquid L1"] },
+  // Robinhood Chain, Arbitrum Orbit L2, gas in ETH, mainnet live 2026-07-01.
+  { id: 4663, name: "Robinhood", llama: "Robinhood", llamaAliases: ["Robinhood Chain"] },
 ];
 
 // Candidate stablecoins by name. This is the name allowlist; each one still has
@@ -40,6 +51,8 @@ export const STABLE_SYMBOLS = [
   "USDe",
   "FRAX",
   "LUSD",
+  "USDG", // Global Dollar (Paxos) — primary stable on Robinhood Chain
+  "USDT0", // canonical bridged USDT on HyperEVM
 ];
 
 // DefiLlama project slugs we consider reputable AMMs for stable pools.

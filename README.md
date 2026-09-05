@@ -43,7 +43,15 @@ Candidate stablecoins: USDC, USDT, DAI, USDS, crvUSD, GHO, USDe, FRAX, LUSD —
 each still has to pass the market-cap gate at runtime. Yield-bearing wrappers
 (sUSDe, sDAI, ...) are excluded; they don't peg to $1.
 
-Chains scanned: Base (home), Ethereum, Arbitrum, Optimism, Polygon.
+Chains scanned: Base (home), Ethereum, Arbitrum, Optimism, Polygon, Gnosis,
+HyperEVM (Hyperliquid), Robinhood Chain. All are bridgeable via Jumper/LI.FI.
+
+Note on the two newest chains: I couldn't confirm from this environment the exact
+string DefiLlama uses in its pool `chain` field for HyperEVM and Robinhood, so
+`src/config.ts` matches several likely spellings (`llamaAliases`). If a live run
+shows zero pairs for one of them, check the `chain` value in
+`https://yields.llama.fi/pools` and add the exact spelling to that chain's
+`llamaAliases`. Wrong spelling = silently skipped, never a crash.
 
 ## Run it
 
