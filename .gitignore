@@ -1,3 +1,6 @@
 node_modules/
 *.log
 .DS_Store
+
+# Your personal manual approvals (keep private; commit deliberately if you want)
+approved-stables.json

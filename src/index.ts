@@ -36,8 +36,15 @@ function printTable(rows: Opportunity[], notional: number) {
 
   for (const r of rows) {
     const flag = r.netUsd > 0 ? "  <-- profitable" : "";
-    const mcapM = (r.verified.stableMcapUsd / 1e6).toFixed(0);
-    const pool = `mcap $${mcapM}M | ${r.verified.project} ${r.verified.poolSymbol} pool $${Math.round(r.verified.tvlUsd).toLocaleString()}`;
+    let pool: string;
+    if (r.source === "manual") {
+      pool = `MANUAL (you approved) ${r.address}${r.note ? ` — ${r.note}` : ""}`;
+    } else if (r.verified) {
+      const mcapM = (r.verified.stableMcapUsd / 1e6).toFixed(0);
+      pool = `mcap $${mcapM}M | ${r.verified.project} ${r.verified.poolSymbol} pool $${Math.round(r.verified.tvlUsd).toLocaleString()}`;
+    } else {
+      pool = "";
+    }
     console.log(
       [
         pad(r.stable, 8),

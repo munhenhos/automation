@@ -1,0 +1,8 @@
+[
+  {
+    "chainId": 8453,
+    "symbol": "EXAMPLEUSD",
+    "address": "0x0000000000000000000000000000000000000000",
+    "note": "why you trust this one — copy this file to approved-stables.json and edit"
+  }
+]

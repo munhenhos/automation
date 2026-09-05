@@ -53,6 +53,32 @@ shows zero pairs for one of them, check the `chain` value in
 `https://yields.llama.fi/pools` and add the exact spelling to that chain's
 `llamaAliases`. Wrong spelling = silently skipped, never a crash.
 
+## Including a lower-TVL stable you trust
+
+The market-cap gate ($50M) keeps junk out, but it also blocks small, legit
+stables you might specifically want to watch. To include one, approve it by hand
+— you provide the exact contract address, and that entry bypasses both the
+market-cap and pool gates. Pinning the address is the safety: it quotes *that*
+token, not whatever shares the symbol on that chain.
+
+```bash
+cp approved-stables.example.json approved-stables.json
+# edit it:
+```
+
+```json
+[
+  { "chainId": 8453, "symbol": "SOMEUSD", "address": "0xTheExactTokenContract", "note": "why you trust it" }
+]
+```
+
+- `chainId` must be a chain the scanner already covers (see the list above).
+- `address` must be the real 0x token contract on that chain — malformed or
+  wrong-chain entries are skipped with a warning, never trusted silently.
+- Manual entries show as `MANUAL (you approved)` in the output.
+- The file is git-ignored so your picks stay local. Override the path with
+  `APPROVED_STABLES=/path/to/file`. Commit it deliberately if you want it shared.
+
 ## Run it
 
 ```bash
