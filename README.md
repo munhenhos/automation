@@ -29,8 +29,8 @@ which is correct.
 Two independent gates, both from **DefiLlama**:
 
 1. **The stablecoin is legit and sizeable.** Its circulating supply / market cap
-   (DefiLlama stablecoins dataset, USD-pegged only) must clear a floor — default
-   **$50M**. This is what stops a scam or dead token sneaking in.
+   (DefiLlama stablecoins dataset, USD- or EUR-pegged) must clear a floor —
+   default **$50M**. This is what stops a scam or dead token sneaking in.
 2. **It's actually pooled here.** It must appear in a pool from a reputable AMM
    (Curve, Uniswap, Aerodrome, Balancer, Velodrome, Fluid, Sushi, Pancake) on
    that chain. The pool TVL floor is deliberately **low ($1k)** — small,
@@ -39,9 +39,22 @@ Two independent gates, both from **DefiLlama**:
 So: big trusted stables, small pools welcome. The trusted projects, candidate
 stables, chains and both thresholds all live in `src/config.ts`.
 
-Candidate stablecoins: USDC, USDT, DAI, USDS, crvUSD, GHO, USDe, FRAX, LUSD —
-each still has to pass the market-cap gate at runtime. Yield-bearing wrappers
-(sUSDe, sDAI, ...) are excluded; they don't peg to $1.
+Candidate stablecoins:
+- USD: USDC, USDT, DAI, USDS, crvUSD, GHO, USDe, FRAX, LUSD, USDG, USDT0
+- EUR: EURC, EURe, EURS, EURA/agEUR, EURt
+
+Each still has to pass the market-cap gate at runtime (for EUR stables the supply
+is converted to USD via price, so the floor is like-for-like). Yield-bearing
+wrappers (sUSDe, sDAI, ...) are excluded; they don't hold a fixed peg.
+
+**On EUR stables and the "settle in USDC" rule.** Everything still ends in USDC
+on Base. A `USDC -> EURx -> USDC` round trip crosses EUR/USD twice, in opposite
+directions almost simultaneously, so the exchange rate cancels to first order —
+what's left is whether that EUR stable is trading at different prices across
+pools (the imbalance), net of fees and gas. Same method, no EUR home needed.
+Caveat: EUR stables are thinner and the EUR/USD spread is wider, so expect more
+noise and more false positives on the EUR rows. Trust the net-after-gas number,
+not the gross.
 
 Chains scanned: Base (home), Ethereum, Arbitrum, Optimism, Polygon, Gnosis,
 HyperEVM (Hyperliquid), Robinhood Chain. All are bridgeable via Jumper/LI.FI.

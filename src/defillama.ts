@@ -3,6 +3,7 @@
 // liquid pool. Nothing is scanned that DefiLlama can't vouch for.
 
 import {
+  ALLOWED_PEG_TYPES,
   ALLOWED_PROJECTS,
   CHAINS,
   MIN_POOL_TVL_USD,
@@ -46,14 +47,28 @@ for (const c of CHAINS) {
 type PeggedAsset = {
   symbol: string;
   pegType: string; // "peggedUSD", "peggedEUR", ...
-  circulating: { peggedUSD?: number } | null;
-  price?: number | null;
+  circulating: Record<string, number> | null; // keyed by pegType, in peg units
+  price?: number | null; // USD per token (with includePrices=true)
 };
 
 /**
+ * Circulating supply converted to USD. For a USD peg the supply is already in
+ * USD; for a EUR peg we multiply the EUR supply by the token's USD price so the
+ * mcap floor is a like-for-like USD comparison. Returns 0 when it can't be
+ * computed (missing price on a non-USD peg), which safely fails the gate.
+ */
+export function mcapUsd(pegType: string, circulating: Record<string, number> | null, price?: number | null): number {
+  const amount = circulating?.[pegType] ?? 0;
+  if (amount <= 0) return 0;
+  if (pegType === "peggedUSD") return amount * (typeof price === "number" && price > 0 ? price : 1);
+  if (typeof price === "number" && price > 0) return amount * price; // e.g. EUR supply * EUR/USD
+  return 0;
+}
+
+/**
  * Pull DefiLlama's stablecoins dataset and return uppercased symbol ->
- * circulating market cap (USD), for USD-pegged assets only. This is the source
- * of truth for "is this stablecoin legit and sizeable".
+ * circulating market cap in USD, for the allowed peg types (USD, EUR). This is
+ * the source of truth for "is this stablecoin legit and sizeable".
  */
 export async function fetchStableMarketCaps(): Promise<Map<string, number>> {
   const res = await fetch(STABLECOINS_URL);
@@ -62,12 +77,12 @@ export async function fetchStableMarketCaps(): Promise<Map<string, number>> {
 
   const caps = new Map<string, number>();
   for (const a of body.peggedAssets) {
-    if (a.pegType !== "peggedUSD") continue; // USD-pegged only
-    const mcap = a.circulating?.peggedUSD ?? 0;
-    if (mcap <= 0) continue;
+    if (!ALLOWED_PEG_TYPES.has(a.pegType)) continue;
+    const cap = mcapUsd(a.pegType, a.circulating, a.price);
+    if (cap <= 0) continue;
     const key = a.symbol.toUpperCase();
     // Keep the largest if a symbol appears twice.
-    caps.set(key, Math.max(caps.get(key) ?? 0, mcap));
+    caps.set(key, Math.max(caps.get(key) ?? 0, cap));
   }
   return caps;
 }
@@ -129,7 +144,7 @@ export async function fetchVerifiedStables(): Promise<Map<string, VerifiedPool>>
 
   if (rejectedForMcap.size > 0) {
     console.error(
-      `  skipped (below $${(MIN_STABLE_MCAP_USD / 1e6).toFixed(0)}M mcap or not USD-pegged in DefiLlama): ${[...rejectedForMcap].join(", ")}`,
+      `  skipped (below $${(MIN_STABLE_MCAP_USD / 1e6).toFixed(0)}M mcap or not a USD/EUR peg in DefiLlama): ${[...rejectedForMcap].join(", ")}`,
     );
   }
 

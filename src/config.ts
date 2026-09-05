@@ -39,9 +39,10 @@ export const CHAINS: Chain[] = [
 
 // Candidate stablecoins by name. This is the name allowlist; each one still has
 // to pass a live legitimacy gate (see MIN_STABLE_MCAP_USD) before it's scanned.
-// Only $1-pegged assets. Yield-bearing wrappers (sUSDe, sDAI, etc.) are
-// deliberately excluded — they do not peg to $1.
+// $1- and €1-pegged assets. Yield-bearing wrappers (sUSDe, sDAI, etc.) are
+// deliberately excluded — they do not hold a fixed peg.
 export const STABLE_SYMBOLS = [
+  // USD
   "USDC",
   "USDT",
   "DAI",
@@ -53,7 +54,17 @@ export const STABLE_SYMBOLS = [
   "LUSD",
   "USDG", // Global Dollar (Paxos) — primary stable on Robinhood Chain
   "USDT0", // canonical bridged USDT on HyperEVM
+  // EUR — settled back to USDC; the EUR/USD leg cancels across the round trip.
+  "EURC", // Circle
+  "EURe", // Monerium
+  "EURS", // Stasis
+  "EURA", // Angle (formerly agEUR)
+  "agEUR", // legacy symbol still used by some pools
+  "EURt", // Tether EUR
 ];
+
+// Which DefiLlama peg types we accept. USD and EUR only.
+export const ALLOWED_PEG_TYPES = new Set<string>(["peggedUSD", "peggedEUR"]);
 
 // DefiLlama project slugs we consider reputable AMMs for stable pools.
 // A stable is only scanned on a chain if it appears in one of these projects
