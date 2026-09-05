@@ -114,13 +114,14 @@ export const MIN_STABLE_MCAP_USD = 50_000_000;
 // deep.
 export const MIN_POOL_TVL_USD = 1_000;
 
-// Trade size to quote, in the book's base units (USDC or EURC). Real
-// profitability is size-dependent, so this matters. Override with the first CLI
-// arg or NOTIONAL env var — but never above MAX_NOTIONAL.
-export const DEFAULT_NOTIONAL_USDC = 500;
+// Trade sizes to quote, in each book's base units (USDC or EURC). Every target
+// is priced at each step so you can see where it turns profitable as gas
+// amortizes. Override with the first CLI arg or NOTIONAL env var as a
+// comma-separated list (e.g. "250,1000"). Each value is capped at MAX_NOTIONAL.
+export const NOTIONAL_STEPS = [500, 2500, 5000];
 
-// Hard cap on trade size: 500 USDC / 500 EURC. Larger sizes are clamped down.
-export const MAX_NOTIONAL = 500;
+// Hard cap on any single trade size.
+export const MAX_NOTIONAL = 5000;
 
 // Placeholder address used only for quoting (no signing, no execution).
 // LI.FI requires a fromAddress even for quotes.

@@ -18,21 +18,25 @@ import { loadApprovedStables } from "./approved.js";
 import { fetchVerifiedStables, isVerified, type VerifiedPool } from "./defillama.js";
 import { fetchTokens, getQuote, type Token } from "./lifi.js";
 
+/** Net result at one trade size. null net/netPct means no route at that size. */
+export type StepResult = {
+  size: number;
+  net: number | null; // base currency units
+  netPct: number | null;
+  gasUsd: number | null;
+};
+
 export type Opportunity = {
   chain: string;
   stable: string;
   address: string;
   source: "defillama" | "manual";
   currency: Currency;
-  /** All amounts below are in the base currency's units (USDC or EURC). */
-  notional: number;
-  finalBase: number;
-  gross: number;
-  gasUsd: number;
-  net: number;
-  netPct: number;
-  outboundTool: string;
-  inboundTool: string;
+  /** One entry per configured trade size, amounts in base units (USDC/EURC). */
+  steps: StepResult[];
+  /** Best (max) net across sizes, for ranking. */
+  bestNet: number;
+  via: string;
   verified?: VerifiedPool;
   note?: string;
 };
@@ -115,9 +119,47 @@ async function buildTargets(): Promise<{ targets: Target[]; baseTokens: Record<C
   return { targets, baseTokens };
 }
 
-export async function scan(notional: number): Promise<Opportunity[]> {
+/** Price one target at one size. Returns null if either leg has no route. */
+async function quoteRoundTrip(
+  base: (typeof BASES)[Currency],
+  baseToken: Token,
+  currency: Currency,
+  target: Target,
+  size: number,
+): Promise<{ net: number; netPct: number; gasUsd: number; via: string } | null> {
+  const fromAmount = toRaw(size, baseToken.decimals);
+
+  // Leg 1: base(Base) -> stable(chain)
+  const out = await getQuote({
+    fromChain: base.chainId,
+    toChain: target.chainId,
+    fromToken: baseToken.address,
+    toToken: target.address,
+    fromAmount,
+  });
+  if (!out || out.toAmount === "0") return null;
+
+  // Leg 2: stable(chain) -> base(Base), feeding leg 1's output back in.
+  const back = await getQuote({
+    fromChain: target.chainId,
+    toChain: base.chainId,
+    fromToken: target.address,
+    toToken: baseToken.address,
+    fromAmount: out.toAmount,
+  });
+  if (!back || back.toAmount === "0") return null;
+
+  const finalBase = fromRaw(back.toAmount, baseToken.decimals);
+  const gross = finalBase - size;
+  const gasUsd = out.gasCostsUSD + back.gasCostsUSD;
+  const gasBase = gasUsd / basePriceUsd(baseToken, currency);
+  const net = gross - gasBase;
+  return { net, netPct: (net / size) * 100, gasUsd, via: `${out.tool}/${back.tool}` };
+}
+
+export async function scan(sizes: number[]): Promise<Opportunity[]> {
   const { targets, baseTokens } = await buildTargets();
-  console.error(`\nScanning ${targets.length} targets at ${notional.toLocaleString()} in each base's units...\n`);
+  console.error(`\nScanning ${targets.length} targets at sizes ${sizes.join(", ")} (each base's units)...\n`);
 
   const results: Opportunity[] = [];
 
@@ -130,44 +172,31 @@ export async function scan(notional: number): Promise<Opportunity[]> {
     if (t.chainId === base.chainId && t.address.toLowerCase() === baseToken.address.toLowerCase()) continue;
 
     const tag = t.source === "manual" ? " [manual]" : "";
-    process.stderr.write(`Quoting ${base.symbol}@Base -> ${t.symbol}@${t.chainName}${tag} -> ${base.symbol}@Base ... `);
+    process.stderr.write(`Quoting ${base.symbol}@Base -> ${t.symbol}@${t.chainName}${tag} ... `);
 
-    const fromAmount = toRaw(notional, baseToken.decimals);
+    const steps: StepResult[] = [];
+    let via = "";
+    let anyRoute = false;
 
-    // Leg 1: base(Base) -> stable(chain)
-    const out = await getQuote({
-      fromChain: base.chainId,
-      toChain: t.chainId,
-      fromToken: baseToken.address,
-      toToken: t.address,
-      fromAmount,
-    });
-    if (!out || out.toAmount === "0") {
-      console.error("no outbound route");
+    for (const size of sizes) {
+      const r = await quoteRoundTrip(base, baseToken, t.currency, t, size);
+      if (!r) {
+        steps.push({ size, net: null, netPct: null, gasUsd: null });
+        continue;
+      }
+      anyRoute = true;
+      via = r.via;
+      steps.push({ size, net: r.net, netPct: r.netPct, gasUsd: r.gasUsd });
+    }
+
+    if (!anyRoute) {
+      console.error("no route");
       continue;
     }
 
-    // Leg 2: stable(chain) -> base(Base), feeding leg 1's output back in.
-    const back = await getQuote({
-      fromChain: t.chainId,
-      toChain: base.chainId,
-      fromToken: t.address,
-      toToken: baseToken.address,
-      fromAmount: out.toAmount,
-    });
-    if (!back || back.toAmount === "0") {
-      console.error("no inbound route");
-      continue;
-    }
-
-    const finalBase = fromRaw(back.toAmount, baseToken.decimals);
-    const gross = finalBase - notional;
-    const gasUsd = out.gasCostsUSD + back.gasCostsUSD;
-    const gasBase = gasUsd / basePriceUsd(baseToken, t.currency);
-    const net = gross - gasBase;
-    const netPct = (net / notional) * 100;
-
-    console.error(`net ${net >= 0 ? "+" : ""}${net.toFixed(2)} ${base.symbol} (${netPct.toFixed(3)}%)`);
+    const nets = steps.map((s) => s.net).filter((n): n is number => n !== null);
+    const bestNet = Math.max(...nets);
+    console.error(steps.map((s) => `${s.size}:${s.net === null ? "-" : (s.net >= 0 ? "+" : "") + s.net.toFixed(2)}`).join(" "));
 
     results.push({
       chain: t.chainName,
@@ -175,19 +204,14 @@ export async function scan(notional: number): Promise<Opportunity[]> {
       address: t.address,
       source: t.source,
       currency: t.currency,
-      notional,
-      finalBase,
-      gross,
-      gasUsd,
-      net,
-      netPct,
-      outboundTool: out.tool,
-      inboundTool: back.tool,
+      steps,
+      bestNet,
+      via,
       verified: t.verified,
       note: t.note,
     });
   }
 
-  results.sort((a, b) => b.netPct - a.netPct);
+  results.sort((a, b) => b.bestNet - a.bestNet);
   return results;
 }

@@ -100,17 +100,19 @@ cp approved-stables.example.json approved-stables.json
 
 ```bash
 npm install
-npm run scan            # default size: 500 (USDC for USD book, EURC for EUR book)
-npm run scan 250        # quote a 250 round trip
-NOTIONAL=100 npm run scan
-# Size is capped at 500 (USDC/EURC); larger values are clamped down.
+npm run scan            # default ladder: 500, 2500, 5000 (USDC / EURC per book)
+npm run scan 250,1000   # custom sizes (comma-separated)
+NOTIONAL=1000 npm run scan
+# Each size is capped at 5000 (USDC/EURC); larger values are clamped down.
 npm test                # offline math self-test
 ```
 
-Output is two ranked tables (USD then EUR): net in the base asset, net %, gas,
-the bridge/DEX used on each leg, and the DefiLlama pool that vouches for the
-stable. Rows that clear costs are flagged. Quotes go stale in seconds — re-run
-before acting on anything.
+Output is two ranked tables (USD then EUR). Each row shows net in the base asset
+at every size in the ladder (`NET@500`, `NET@2500`, `NET@5000`), plus gas, the
+bridge/DEX used, and the DefiLlama pool that vouches for the stable. Because gas
+is roughly fixed, a trip is often negative at 500 but positive at 5000 — the
+ladder makes that visible. Rows profitable at some size are flagged. Quotes go
+stale in seconds — re-run before acting on anything.
 
 ## Network requirement
 
